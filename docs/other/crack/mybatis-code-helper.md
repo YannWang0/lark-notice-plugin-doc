@@ -73,62 +73,259 @@ public class RsaUtils {
 
 ```java
 import javassist.*;
-import org.springframework.lang.NonNull;
-
+import javassist.bytecode.*;
 import java.io.*;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Comparator;
+import java.util.Enumeration;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 /**
- * MyBatisCodeHelperProCrack
- *
- * @author xm.z
+ * 基于特征字符串的字节码修改器
+ * 用于查找并修改 MyBatisCodeHelper-Pro 插件中的特定类，绕过其验证逻辑。
  */
 public class MyBatisCodeHelperProCrack {
 
-    /**
-     * 插件名称，用于构建查找路径。
-     * 通常对应插件存放的主目录名。
-     */
-    private static final String TARGET_CLASS = "com.ccnode.codegenerator.validate.utils.RsaUtils";
+    // 【特征码】：需要在字节码常量池中搜索的目标字符串（Base64编码的特定特征）
+    private static final String TARGET_FEATURE = "TUlHZk1BMEdDU3FHU0liM0RRRUJBUVVBQTRHTkFEQ0JpUUtCZ1FDZzUyUjExV0h1MysvNUV2WnhkS0l2a3ovekpnS2VNUUhNLytMVkxSZS9zWUpFQlUxbUUrODc3MmJJckk4UThscldqSHc5cmVjQ1RWVVhXUnhWYXBndk1HYTZ3KzU4STZwYXdSaFhwZDBrRkhUY2xxeUZGWFpoS3ZiQUtoblphRGNuZkJtSkhObTQwR0JFTGpCTmx5MXpha2FIblFmUzF0QlhaSGQwOUV0c2VRSURBUUFC";
 
-    /**
-     * 要修改的方法名。
-     * 该方法将被替换为自定义逻辑。
-     */
-    private static final String METHOD_NAME = "fromEncrptData";
+    // 【目标目录】：插件所在的本地目录名称
+    private static final String TARGET_DIR_NAME = "MyBatisCodeHelper-Pro";
 
-    /**
-     * 替换后的方法体内容。
-     * 使用 Javassist 语法，返回伪造的授权信息。
-     */
-    private static final String METHOD_BODY = "return (com.ccnode.codegenerator.validate.response.ValidateNewResultData)gson.fromJson($1,com.ccnode.codegenerator.validate.response.ValidateNewResultData.class);";
-
-    public static void main(String[] args) throws FileNotFoundException {
+    public static void main(String[] args) {
         try {
+            // 1. 寻找目标 JAR 文件
             File jarFile = findMatchingJar();
-            File modifiedClassFile = modifyTargetClass(jarFile);
-            updateJarFile(jarFile, modifiedClassFile);
-            cleanupTempDirectory(jarFile);
+            File parentDir = jarFile.getParentFile();
+            System.out.println("🎯 [TARGET] 找到目标 JAR: " + jarFile.getName());
+
+            // 2. 清理上一次运行留下的临时文件
+            cleanupTempDirectory(parentDir);
+
+            System.out.println("🔍 [ACTION] 正在扫描包含特征字符串的类...\n");
+
+            // 3. 扫描 JAR 并修改符合条件的类
+            int modifiedCount = scanAndModifyTargets(jarFile, parentDir.getAbsolutePath());
+
+            System.out.println("\n----------------------------------------");
+
+            // 4. 如果有类被修改，则更新 JAR 包
+            if (modifiedCount > 0) {
+                updateJarFile(jarFile);
+            } else {
+                System.out.println("⚠️ [WARN] 未修改任何类，跳过 JAR 更新。");
+            }
+
+            // 5. 再次清理临时文件（保持环境整洁）
+            cleanupTempDirectory(parentDir);
+            System.out.println("🎉 [DONE] 流程执行完毕！");
+
         } catch (Exception e) {
-            System.err.println("❌ 程序异常: " + e.getMessage());
+            System.err.println("❌ [ERROR] 程序异常: " + e.getMessage());
         }
     }
 
     /**
-     * 查找匹配的 JAR 文件
+     * 扫描并修改目标类
+     * 逻辑：遍历 JAR 中所有类 -> 查找常量池包含特征字符串的类 -> 查找包含 LDC 指令的方法 -> 替换方法体
+     */
+    private static int scanAndModifyTargets(File jarFile, String outputDirPath) throws Exception {
+        ClassPool pool = ClassPool.getDefault();
+        pool.appendClassPath(jarFile.getAbsolutePath());
+
+        JarFile jar = new JarFile(jarFile);
+        Enumeration<JarEntry> entries = jar.entries();
+        int modifiedCount = 0;
+
+        while (entries.hasMoreElements()) {
+            JarEntry entry = entries.nextElement();
+            // 只处理 .class 文件
+            if (!entry.getName().endsWith(".class")) continue;
+
+            String className = entry.getName().replace("/", ".").replace(".class", "");
+
+            try {
+                CtClass ctClass = pool.get(className);
+                ClassFile classFile = ctClass.getClassFile();
+                ConstPool constPool = classFile.getConstPool();
+
+                // 在常量池中查找特征字符串的索引
+                int targetCpIndex = findStringInConstPool(constPool, TARGET_FEATURE);
+                // 如果类的常量池中没有该特征，跳过
+                if (targetCpIndex == -1) {
+                    ctClass.detach();
+                    continue;
+                }
+
+                System.out.println("📦 [SCAN] 发现特征类: " + className);
+                boolean modified = false;
+
+                // 遍历类中的所有方法
+                for (MethodInfo methodInfo : classFile.getMethods()) {
+                    CodeAttribute codeAttr = methodInfo.getCodeAttribute();
+                    if (codeAttr == null) continue;
+
+                    // 【核心匹配逻辑】：只有当方法字节码中真实出现了 LDC 指令加载该特征字符串时，才进行处理
+                    // 这能精准定位到验证逻辑的核心方法
+                    if (containsLdcInstruction(codeAttr, targetCpIndex)) {
+                        String methodName = methodInfo.getName();
+                        String descriptor = methodInfo.getDescriptor();
+
+                        // --- 方法过滤逻辑 ---
+                        // 1. 必须是静态方法 (static)
+                        int accessFlags = methodInfo.getAccessFlags();
+                        if ((accessFlags & AccessFlag.STATIC) == 0) {
+                            System.out.println(" ⏩ [SKIP] 非static方法: " + methodName + descriptor);
+                            continue;
+                        }
+
+                        // 2. 参数个数必须 <= 1 (通常用于处理验证Key或JSON输入)
+                        CtClass[] paramTypes = Descriptor.getParameterTypes(descriptor, pool);
+                        if (paramTypes.length > 1) {
+                            System.out.println(" ⏩ [SKIP] 参数个数>1: " + methodName + descriptor);
+                            continue;
+                        }
+
+                        // --- 逻辑替换准备 ---
+                        // 通过方法名和描述符精准查找 CtMethod 对象（解决重载方法的歧义）
+                        CtMethod targetCtMethod = null;
+                        for (CtMethod ctMethod : ctClass.getDeclaredMethods()) {
+                            if (ctMethod.getName().equals(methodName) &&
+                                    ctMethod.getMethodInfo2().getDescriptor().equals(descriptor)) {
+                                targetCtMethod = ctMethod;
+                                break;
+                            }
+                        }
+
+                        if (targetCtMethod == null) {
+                            System.out.println(" ⚠️ [WARN] 未找到匹配的 CtMethod: " + methodName + descriptor);
+                            continue;
+                        }
+
+                        try {
+                            // 生成绕过逻辑的代码并替换原方法体
+                            String newBody = generateSmartBypassBody(targetCtMethod, descriptor);
+                            targetCtMethod.setBody(newBody);
+                            System.out.println(" ✅ [PATCH] 成功拦截并替换: " + methodName + descriptor);
+                            System.out.println(" ↳ 注入逻辑: " + newBody);
+                            modified = true;
+                        } catch (NotFoundException e) {
+                            System.out.println(" ⏭️ [SKIP] 缺少外部依赖: " + methodName + " | 缺失: " + e.getMessage());
+                        } catch (Exception e) {
+                            System.out.println(" ❌ [FAIL] 替换失败: " + methodName + descriptor + " | 原因: " + e.getMessage());
+                        }
+                    }
+                }
+
+                // 如果该类被修改，则写入文件系统（用于后续打包）
+                if (modified) {
+                    ctClass.writeFile(outputDirPath);
+                    modifiedCount++;
+                }
+                ctClass.detach();
+            } catch (Exception e) {
+                System.out.println(" ❌ [ERROR] 处理类失败: " + className + " | 原因: " + e.getMessage());
+            }
+        }
+
+        jar.close();
+        System.out.println("\n📊 [SUMMARY] 扫描完成，共精准修改了 " + modifiedCount + " 个类。");
+        return modifiedCount;
+    }
+
+    /**
+     * 在常量池中查找指定字符串
+     * @return 字符串在常量池中的索引，未找到返回 -1
+     */
+    private static int findStringInConstPool(ConstPool cp, String target) {
+        for (int i = 1; i < cp.getSize(); i++) {
+            if (cp.getTag(i) == ConstPool.CONST_String) {
+                try {
+                    if (target.equals(cp.getStringInfo(i))) return i;
+                } catch (Exception ignored) {}
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 检查方法字节码中是否包含加载指定常量池索引的 LDC 指令
+     * 这是精准定位“验证逻辑”的关键，避免误伤仅引用了该字符串但不用于验证的类
+     */
+    private static boolean containsLdcInstruction(CodeAttribute codeAttr, int targetCpIndex) {
+        try {
+            CodeIterator iter = codeAttr.iterator();
+            while (iter.hasNext()) {
+                int pos = iter.next();
+                int op = iter.byteAt(pos);
+                // 检查 LDC, LDC_W, LDC2_W 指令
+                if (op == Opcode.LDC) {
+                    if (iter.byteAt(pos + 1) == targetCpIndex) return true;
+                } else if (op == Opcode.LDC_W || op == Opcode.LDC2_W) {
+                    if (iter.u16bitAt(pos + 1) == targetCpIndex) return true;
+                }
+            }
+        } catch (BadBytecode ignored) {}
+        return false;
+    }
+
+    /**
+     * 智能生成绕过逻辑的代码体
+     * 根据原方法的返回类型和参数类型，生成不同的返回逻辑
+     */
+    private static String generateSmartBypassBody(CtMethod method, String descriptor) throws Exception {
+        // 解析方法描述符，获取返回类型描述
+        String returnDesc = descriptor.substring(descriptor.indexOf(')') + 1);
+
+        // 1. void 返回
+        if ("V".equals(returnDesc)) return "{ return; }";
+
+        // 2. boolean 返回 -> 返回 false (失败/无效)
+        if ("Z".equals(returnDesc)) return "return false;";
+
+        // 3. 数值类型返回 -> 返回 0
+        if ("I".equals(returnDesc) || "J".equals(returnDesc) || "F".equals(returnDesc) ||
+                "D".equals(returnDesc) || "B".equals(returnDesc) || "C".equals(returnDesc) || "S".equals(returnDesc)) {
+            return "return 0;";
+        }
+
+        // 4. 对象引用类型返回
+        if (returnDesc.startsWith("L") && returnDesc.endsWith(";")) {
+            String internalName = returnDesc.substring(1, returnDesc.length() - 1);
+            String fullyQualifiedName = internalName.replace('/', '.');
+            CtClass[] paramTypes = method.getParameterTypes();
+
+            // 【智能修复】：如果方法接收一个 String 参数（通常是 JSON 字符串）
+            // 则尝试使用 Gson 将其反序列化为期望的对象返回
+            // 这通常用于绕过需要返回复杂 LicenseResult 对象的验证
+            if (paramTypes.length == 1 && paramTypes[0].getName().equals("java.lang.String")) {
+                return "return (" + fullyQualifiedName + ") new com.google.gson.Gson().fromJson($1, " + fullyQualifiedName + ".class);";
+            }
+            // 其他对象类型直接返回 null
+            return "return null;";
+        }
+        return "return null;";
+    }
+
+    /**
+     * 寻找目标 JAR 文件
+     * 优先在 ~/Downloads/MyBatisCodeHelper-Pro/lib/ 下查找，未找到则在当前目录查找
      */
     private static File findMatchingJar() throws Exception {
         String userHome = System.getProperty("user.home");
-        Path basePath = Paths.get(userHome, "Downloads", PLUGIN_NAME, "lib");
+        Path basePath = Paths.get(userHome, "Downloads", TARGET_DIR_NAME, "lib");
+
         if (!Files.exists(basePath) || !Files.isDirectory(basePath)) {
-            throw new FileNotFoundException("目录不存在: " + basePath);
+            basePath = Paths.get(".");
         }
 
         try (Stream<Path> stream = Files.list(basePath)) {
             return stream
-                    .filter(path -> path.getFileName().toString().contains(PLUGIN_NAME) && path.toString().endsWith(".jar"))
+                    .filter(path -> path.getFileName().toString().startsWith("instrumented-MyBatisCodeHelper-Pro"))
                     .findFirst()
                     .map(Path::toFile)
                     .orElseThrow(() -> new FileNotFoundException("未找到匹配的 JAR 文件"));
@@ -136,59 +333,23 @@ public class MyBatisCodeHelperProCrack {
     }
 
     /**
-     * 修改目标类的方法
-     */
-    private static File modifyTargetClass(File jarFile) throws Exception {
-        String outputDirPath = Paths.get(jarFile.getParent()).toString();
-        Path outputDir = Paths.get(outputDirPath);
-
-        if (Files.exists(outputDir)) {
-            deleteDirectoryRecursively(outputDir.toFile());
-        }
-
-        if (!Files.exists(outputDir) && !Files.createDirectory(outputDir).isAbsolute()) {
-            throw new IOException("❌ 创建目录失败: " + outputDir);
-        }
-
-        ClassPool pool = ClassPool.getDefault();
-        pool.appendClassPath(jarFile.getAbsolutePath());
-
-        CtClass ctClass = null;
-        try {
-            ctClass = pool.get(TARGET_CLASS);
-            CtMethod method = ctClass.getDeclaredMethod(METHOD_NAME, new CtClass[]{pool.get("java.lang.String")});
-            method.setBody(METHOD_BODY);
-            ctClass.writeFile(outputDirPath);
-
-            String modifiedClassPath = outputDirPath + File.separator + TARGET_CLASS.replace('.', File.separatorChar) + ".class";
-            File modifiedClassFile = new File(modifiedClassPath);
-
-            if (!modifiedClassFile.exists()) {
-                throw new FileNotFoundException("❌ 修改后的类文件未生成: " + modifiedClassPath);
-            }
-
-            System.out.println("✅ 类文件已修改并保存至: " + modifiedClassPath);
-            return modifiedClassFile;
-        } finally {
-            // 释放 CtClass 资源
-            if (ctClass != null) {
-                ctClass.detach();
-            }
-        }
-    }
-
-    /**
      * 更新 JAR 文件
+     * 调用系统的 jar 命令将修改后的 com 目录更新回原 JAR 包
      */
-    private static void updateJarFile(File jarFile, File modifiedClassFile) throws Exception {
+    private static void updateJarFile(File jarFile) throws Exception {
         File directory = jarFile.getParentFile();
-        String classPath = directory.toPath().relativize(modifiedClassFile.toPath()).toString();
+        Path comDir = directory.toPath().resolve("com");
 
-        ProcessBuilder pb = new ProcessBuilder("jar", "uvf", jarFile.getName(), classPath);
+        if (!Files.exists(comDir)) {
+            System.out.println("⚠️ [WARN] 未找到修改后的 com 目录，跳过更新。");
+            return;
+        }
+
+        ProcessBuilder pb = new ProcessBuilder("jar", "uvf", jarFile.getName(), "com");
         pb.redirectErrorStream(true);
         pb.directory(directory);
 
-        System.out.println("🔧 正在更新 JAR 文件...");
+        System.out.println("🔧 [ACTION] 正在更新 JAR 文件...");
         Process process = pb.start();
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -200,43 +361,29 @@ public class MyBatisCodeHelperProCrack {
 
         int exitCode = process.waitFor();
         if (exitCode == 0) {
-            System.out.println("✅ JAR 文件更新成功！");
+            System.out.println("✅ [SUCCESS] JAR 文件更新成功！");
         } else {
-            System.err.println("❌ JAR 文件更新失败，退出码: " + exitCode);
+            System.err.println("❌ [ERROR] JAR 文件更新失败，退出码: " + exitCode);
         }
     }
 
     /**
      * 清理临时目录
      */
-    private static void cleanupTempDirectory(File jarFile) throws IOException {
-        File tempDir = new File(Paths.get(jarFile.getParent()).toAbsolutePath().toString());
-
-        if (tempDir.exists()) {
-            deleteDirectoryRecursively(tempDir);
+    private static void cleanupTempDirectory(File directory) throws IOException {
+        Path tempDir = directory.toPath().resolve("com");
+        if (Files.isDirectory(tempDir)) {
+            deleteDirectoryRecursively(tempDir.toFile());
         }
     }
 
-    /**
-     * 递归删除目录
-     */
-    private static void deleteDirectoryRecursively(@NonNull File directory) throws IOException {
-        // 构建 com 目录路径
-        Path comDir = directory.toPath().resolve("com");
-        if (Files.isDirectory(comDir)) {
-            System.out.println("🔧 正在删除 com 目录: " + comDir);
-
-            // 使用 try-with-resources 包裹 Files.walk() 生成的 Stream
-            try (Stream<Path> walkStream = Files.walk(comDir)) {
-                walkStream.sorted(Comparator.reverseOrder()).forEach(path -> {
-                    try {
-                        Files.delete(path);
-                        System.out.println("🗑️ 删除: " + path);
-                    } catch (IOException e) {
-                        System.err.println("❌ 删除失败: " + path + "，原因: " + e.getMessage());
-                    }
-                });
-            }
+    private static void deleteDirectoryRecursively(File directory) throws IOException {
+        try (Stream<Path> walkStream = Files.walk(directory.toPath())) {
+            walkStream.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.delete(path);
+                } catch (IOException ignored) {}
+            });
         }
     }
 }
