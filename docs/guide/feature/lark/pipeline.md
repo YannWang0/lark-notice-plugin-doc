@@ -8,6 +8,8 @@
 
 用于发送简单文本或 `@` 提醒消息。
 
+> `ats` 传入 `open_id` 或手机号，`atAll: true` 表示 `@所有人`（此时 `ats` 不生效）。也可以像下面示例那样在 `text` 里手写 `<at>` 标签。
+
 ```shell
 pipeline {
     agent any
@@ -178,6 +180,7 @@ pipeline {
 
 > 1. 按钮颜色 `type` 的取值范围为 `primary`、`danger`、`default`。
 > 2. 字体颜色 `color` 的取值范围为 `green`、`red`、`grey`、`default`。
+> 3. 也可以用 `cardFields` 代替手写正文行，见 [8. 自定义卡片内容行](#_8-自定义卡片内容行)。
 
 ```shell
 pipeline {
@@ -276,6 +279,42 @@ pipeline {
                               url: "${BUILD_URL}console"
                            ]
                         ]
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+## 8. 自定义卡片内容行
+
+`cardFields` 用结构化的方式描述卡片正文行，省去手写 Markdown。每行支持 `keyname`（行标签）、`value`（行内容）和可选的 `url`（填了该行变成链接），三个字段都支持环境变量。
+
+飞书卡片是 Markdown 结构，这些行会渲染成 `**标签**: 内容` 的正文行，排在 `text` 之前。`value` 为空的行会被丢弃。
+
+```shell
+pipeline {
+    agent any
+    stages {
+        stage('card-fields'){
+            steps {
+                echo "发送自定义内容行的卡片消息..."
+            }
+            post {
+                success {
+                    lark (
+                        robot: "f72aa1bb-0f0b-47c7-8387-272d266dc25c",
+                        type: "CARD",
+                        title: "📢 Jenkins 构建通知",
+                        cardFields: [
+                            [keyname: "任务名称", value: "${JOB_NAME}", url: "${JOB_URL}"],
+                            [keyname: "任务编号", value: "${BUILD_DISPLAY_NAME}", url: "${BUILD_URL}"],
+                            [keyname: "构建状态", value: "${currentBuild.currentResult}"],
+                            [keyname: "构建用时", value: "${currentBuild.durationString}"],
+                            [keyname: "发布分支", value: '${GIT_BRANCH}']
+                        ],
+                        ats: ["ou_xxxxxxxx"]
                     )
                 }
             }

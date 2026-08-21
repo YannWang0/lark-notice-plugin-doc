@@ -102,6 +102,10 @@ pipeline {
                         ],
                         messageUrl: "${BUILD_URL}",
                         picUrl: 'https://www.jenkins.io/images/logos/jenkins/jenkins.png',
+                        sourceDesc: 'Jenkins CI',
+                        quoteTitle: '发布说明',
+                        quoteText: "${BUILD_DISPLAY_NAME} 已完成构建",
+                        quoteUrl: "${BUILD_URL}changes",
                         cardFields: [
                             [
                                 keyname: '任务名称',
@@ -150,3 +154,5 @@ pipeline {
 > 4. 设置 `text` 后它会作为卡片底部正文渲染；未设置时，若已有内容行则不再渲染正文块。
 > 5. `${VAR}` 用双引号由 `Groovy` 求值，用单引号则原样交给插件在发送前用构建环境变量展开。
 > 6. `执行人` 默认取自构建原因；示例中的 `${env.BUILD_USER}` 需要安装 `Build User Vars` 插件。
+> 7. `sourceDesc` 可自定义卡片头部来源文案（`source.desc`），留空时使用内置文案。
+> 8. `quoteTitle`、`quoteText`、`quoteUrl` 对应引用区块（`quote_area`）；三者都不填时整个区块不渲染，填了 `quoteUrl` 该区块变为可点击。
