@@ -67,24 +67,24 @@
 > [!NOTE]
 > 仅影响内置卡片标题与默认模板，自定义消息内容不做翻译。
 
-## 4.1 平台消息能力差异
+### 4.1 平台消息能力差异
 
-虽然插件对外统一暴露了消息模式，但不同平台底层支持能力并不完全相同：
+插件对外统一暴露消息类型，但每个平台只接受其中一部分。传入平台不接受的类型会直接失败并给出提示。
 
-| 平台 | 重点支持 |
-|------|---------|
-| Lark / 飞书 | `TEXT`、`IMAGE`、`SHARE_CHAT`、`POST`、`MARKDOWN`、`CARD`，以及 Freestyle 自定义 JSON 卡片 |
-| 钉钉 | `TEXT`、`LINK`、`MARKDOWN`、`CARD` |
-| 企业微信 | `TEXT`、`MARKDOWN`、`CARD` |
+| 消息类型 | Lark / 飞书 | 钉钉 | 企业微信 |
+|---|---|---|---|
+| `TEXT` | ✅ | ✅ | ✅ |
+| `MARKDOWN` | ✅ | ✅ | ✅ |
+| `CARD` | ✅ | ✅ | ✅ |
+| `IMAGE` | ✅ | — | — |
+| `SHARE_CHAT` | ✅ | — | — |
+| `POST` | ✅ | — | ⚠️ 按 `MARKDOWN` 发送 |
+| `LINK` | — | ✅ | ⚠️ 按 `MARKDOWN` 发送 |
+| `FEED_CARD` | — | ✅ | — |
 
-企业微信的补充说明：
+Lark / 飞书另外支持在 `Freestyle` 中粘贴自定义 JSON 卡片。
 
-- `Freestyle` 下更推荐使用默认卡片模式；如需精确控制消息结构，优先使用 `Pipeline` 的 `wechatWork` 步骤。
-- `Pipeline` 中传入 `LINK` 或 `POST` 时，插件会按 `MARKDOWN` 发送。
-- `IMAGE` 不是企业微信独立支持的消息类型；需要图片时，优先使用卡片 `picUrl` 或 `topImg.imgKey` 中的外部图片 URL。
-- 企业微信卡片使用 `template_card.news_notice` 模板，不是飞书那种自由结构卡片。
-- 企业微信卡片图片需要可直接访问的 `http/https` 地址；如果未提供可用图片地址，插件会回退到默认 Jenkins 图片。
-- 企业微信卡片最多展示 3 个跳转按钮。
+各平台参数的细节说明见对应的 Pipeline 页面：[Lark / 飞书](./lark/pipeline)、[钉钉](./ding/pipeline)、[企业微信](./wechat-work/pipeline)。
 
 ## 5. 代理配置
 

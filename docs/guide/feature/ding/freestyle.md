@@ -17,8 +17,8 @@
 ```text
 ## <font color='blue'>📢 Jenkins 构建通知</font>  
 ---  
-📋 **任务名称**：[${PROJECT_NAME}](${JENKINS_URL}/job/${PROJECT_NAME}/)  
-🔢 **任务编号**：[${JOB_NAME}](${JENKINS_URL}/job/${PROJECT_NAME}/${BUILD_NUMBER}/)  
+📋 **任务名称**：[${PROJECT_NAME}](${PROJECT_URL})  
+🔢 **任务编号**：[${JOB_NAME}](${JOB_URL})  
 🌟 **构建状态**:  <font color='blue'>${JOB_STATUS}</font>  
 🕐 **构建用时**:  ${JOB_DURATION}  
 👤 **执  行 者**:  ${EXECUTOR_NAME}  

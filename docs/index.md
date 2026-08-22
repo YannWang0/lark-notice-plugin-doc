@@ -26,5 +26,5 @@ features:
     details: 兼容 Freestyle 与 Pipeline，可沿用现有 Jenkins 作业方式配置通知。
   - icon: 📨
     title: 多消息类型
-    details: 提供文本、Markdown、链接、卡片、富文本，以及 Lark / 飞书场景下的自定义 JSON 卡片。
+    details: 提供文本、Markdown、链接、卡片、富文本、图文列表，以及 Lark / 飞书场景下的自定义 JSON 卡片。
 ---

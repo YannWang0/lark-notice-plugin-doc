@@ -15,8 +15,8 @@
 ![](img/faq-custom-md-msg.png)
 
 ```text
-📋 **任务名称**：[${PROJECT_NAME}](${JENKINS_URL}/job/${PROJECT_NAME}/)
-🔢 **任务编号**：[${JOB_NAME}](${JENKINS_URL}/job/${PROJECT_NAME}/${BUILD_NUMBER}/)
+📋 **任务名称**：[${PROJECT_NAME}](${PROJECT_URL})
+🔢 **任务编号**：[${JOB_NAME}](${JOB_URL})
 🌟 **构建状态**:  <text_tag color='blue'>${JOB_STATUS}</text_tag>
 🕐 **构建用时**:  ${JOB_DURATION}
 👤 **执  行 者**:  ${EXECUTOR_NAME}
@@ -51,7 +51,7 @@
             },
             {
                 "tag": "markdown",
-                "content": "📋 **任务名称**: [${PROJECT_NAME}](${JENKINS_URL}/job/${PROJECT_NAME}/)\n🔢 **任务编号**: [${JOB_NAME}](${JENKINS_URL}/job/${PROJECT_NAME}/${BUILD_NUMBER}/)\n🌟 **构建状态**:  <text_tag color='blue'>${JOB_STATUS}</text_tag>\n🕐 **构建用时**:  ${JOB_DURATION}\n👤 **执  行 者** :  ${EXECUTOR_NAME}\n"
+                "content": "📋 **任务名称**: [${PROJECT_NAME}](${PROJECT_URL})\n🔢 **任务编号**: [${JOB_NAME}](${JOB_URL})\n🌟 **构建状态**:  <text_tag color='blue'>${JOB_STATUS}</text_tag>\n🕐 **构建用时**:  ${JOB_DURATION}\n👤 **执  行 者** :  ${EXECUTOR_NAME}\n"
             },
             {
                 "tag": "hr"
@@ -78,7 +78,7 @@
                                 "behaviors": [
                                     {
                                         "type": "open_url",
-                                        "default_url": "${JENKINS_URL}/job/${PROJECT_NAME}/${BUILD_NUMBER}/changes"
+                                        "default_url": "${JOB_URL}changes"
                                     }
                                 ]
                             }
@@ -104,7 +104,7 @@
                                 "behaviors": [
                                     {
                                         "type": "open_url",
-                                        "default_url": "${JENKINS_URL}/job/${PROJECT_NAME}/${BUILD_NUMBER}/console"
+                                        "default_url": "${JOB_URL}console"
                                     }
                                 ]
                             }
