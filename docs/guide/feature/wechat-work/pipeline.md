@@ -101,8 +101,9 @@ pipeline {
                             '本次构建执行完成，请查看变更记录和控制台日志。'
                         ],
                         messageUrl: "${BUILD_URL}",
-                        picUrl: 'https://www.jenkins.io/images/logos/jenkins/jenkins.png',
+                        cardImageUrl: 'https://www.jenkins.io/images/logos/jenkins/jenkins.png',
                         sourceDesc: 'Jenkins CI',
+                        sourceIconUrl: 'https://www.jenkins.io/images/logos/jenkins/jenkins.png',
                         quoteTitle: '发布说明',
                         quoteText: "${BUILD_DISPLAY_NAME} 已完成构建",
                         quoteUrl: "${BUILD_URL}changes",
@@ -150,9 +151,10 @@ pipeline {
 
 > 1. 设置 `cardFields` 后默认行全部不再渲染，最多 6 行（企业微信限制「列表长度不超过6」），超出的会被丢弃。
 > 2. 未配置 `buttons` 时默认补充 `更改记录` 和 `控制台`，最多显示 3 个。
-> 3. `picUrl` 需为公网可访问的 `http/https` 图片地址，否则使用内置图片。
+> 3. `cardImageUrl` 与 `sourceIconUrl` 都需为公网可访问的 `http/https` 图片地址，否则使用内置图片。企业微信只接受图片地址，飞书那种上传后的 image key 在这里用不了。
 > 4. 设置 `text` 后它会作为卡片底部正文渲染；未设置时，若已有内容行则不再渲染正文块。
 > 5. `${VAR}` 用双引号由 `Groovy` 求值，用单引号则原样交给插件在发送前用构建环境变量展开。
 > 6. `执行人` 默认取自构建原因；示例中的 `${env.BUILD_USER}` 需要安装 `Build User Vars` 插件。
-> 7. `sourceDesc` 可自定义卡片头部来源文案（`source.desc`），留空时使用内置文案。
+> 7. `sourceDesc` 与 `sourceIconUrl` 对应卡片头部来源的文案与图标（`source.desc`、`source.icon_url`），留空时使用内置值。
 > 8. `quoteTitle`、`quoteText`、`quoteUrl` 对应引用区块（`quote_area`）；三者都不填时整个区块不渲染，填了 `quoteUrl` 该区块变为可点击。
+> 9. `2.1.10` 起图文图片参数由 `picUrl` 改名为 `cardImageUrl`，并移除了 `topImg`（它承载的是飞书 image key，企业微信无法渲染）。旧参数不再接受，升级时需要改写流水线脚本。

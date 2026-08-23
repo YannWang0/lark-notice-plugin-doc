@@ -1,6 +1,11 @@
 # 更新日志
 
-## [2.1.10] 2026-08-22
+## [2.1.10] 2026-08-23
+
+### ⚠️ 不兼容变更
+
+- 💥 `wechatWork` 步骤移除 `picUrl` 与 `topImg` 两个参数：图文图片改名为 `cardImageUrl`（对齐官方字段 `card_image.url`，`picUrl` 是钉钉 link 消息的字段名），`topImg` 承载的是飞书上传后的 image key，企业微信无法渲染，仅在 key 恰好是 http 地址时才生效。用到这两个参数的流水线需要改写为 `cardImageUrl`，否则步骤会因参数不存在而报错。飞书与钉钉步骤的 `topImg`、`picUrl` 不受影响。
+- ⬆️ Jenkins 基线升级至 `2.555.3`，详见下方 Build / Dependency。
 
 ### ⭐ Features
 
@@ -8,6 +13,7 @@
 - ✨ `lark` 步骤新增 `ats` 与 `atAll` 参数，此前 Pipeline 无法通过参数 `@` 人，只能在 `text` 里手写 `<at>` 标签。
 - ✨ 钉钉新增 `FEED_CARD` 图文列表消息类型（`feedCardLinks`），以及 `actionCard` 的 `hideAvatar` 隐藏头像选项。
 - ✨ 企业微信卡片新增引用区块 `quoteTitle` / `quoteText` / `quoteUrl`（`quote_area`），并接通此前未生效的 `sourceDesc`（`source.desc`）自定义头部来源文案。
+- ✨ 企业微信卡片头部来源图标支持自定义：`wechatWork` 步骤新增 `sourceIconUrl`（`source.icon_url`），此前该图标硬编码为 Jenkins 图标，无法改成自己团队的标识（#288）。
 
 ### 🔨 Build / Dependency
 
@@ -36,7 +42,7 @@
 - 🩹 修复 `dingTalk` 步骤的 `ats` 不做环境变量展开的问题。
 - 🩹 修复 `failOnError: false` 无法拦住发送过程中意外异常的问题，此前任何运行时异常都会导致构建失败，与该开关语义相反。
 - 🩹 平台专属步骤指向其他协议的机器人时（如 `wechatWork` 指向飞书机器人），改为输出可读的错误提示并指明应使用的步骤，此前会抛出 `ClassCastException` 到构建日志。
-- 🩹 修复企业微信卡片图文位置始终显示 Jenkins 图片的问题：卡片图片现在优先取用户配置的 `picUrl`，仅当未配置或非可访问 HTTP(S) 地址时才回退默认图。
+- 🩹 修复企业微信卡片图文位置始终显示 Jenkins 图片的问题：卡片图片现在优先取用户配置的 `cardImageUrl`，仅当未配置或非可访问 HTTP(S) 地址时才回退默认图。
 - 🩹 恢复企业微信卡片在有结构化构建字段时不重复渲染正文块的行为，避免正文与内容行重复展示。
 
 ## [2.1.9] 2026-06-19
